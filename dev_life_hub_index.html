@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DevLife Hub</title>
+  <!-- Tailwind Play CDN (rápido para páginas estáticas / GitHub Pages) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            base: {
+              900: "#0b0b12", // preto profundo
+              800: "#11111b",
+            },
+            blue: {
+              400: "#60a5fa", // azul claro
+              500: "#3b82f6",
+            },
+            purple: {
+              400: "#a78bfa",
+              500: "#8b5cf6",
+            },
+          },
+          boxShadow: {
+            glow: "0 0 0 2px rgba(99,102,241,0.25), 0 0 30px rgba(59,130,246,0.15)",
+          },
+          borderRadius: {
+            '2xl': '1.25rem',
+          }
+        }
+      }
+    }
+  </script>
+  <!-- React via CDN + Babel para JSX em arquivo único -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Ícones lucide -->
+  <script type="module">
+    import { createIcons, Plus, Calendar, Notebook, HelpCircle, Wallet, Sparkles, User, Trash2, Edit3, Save, LogOut } from "https://cdn.skypack.dev/lucide";
+    window.Lucide = { createIcons, Plus, Calendar, Notebook, HelpCircle, Wallet, Sparkles, User, Trash2, Edit3, Save, LogOut };
+  </script>
+  <style>
+    html, body, #root { height: 100%; }
+  </style>
+</head>
+<body class="bg-base-900 text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+
+    // Util: localStorage com namespace
+    const ns = 'devlifehub:v1:';
+    const load = (k, def) => {
+      try { return JSON.parse(localStorage.getItem(ns + k)) ?? def; } catch { return def; }
+    }
+    const save = (k, v) => localStorage.setItem(ns + k, JSON.stringify(v));
+
+    const TabButton = ({active, onClick, icon, label}) => (
+      <button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition ${active ? 'bg-purple-500/20 border-purple-500 shadow-glow' : 'bg-base-800 border-white/10 hover:border-purple-500/60'}`}>
+        {icon}
+        <span className="font-medium">{label}</span>
+      </button>
+    );
+
+    const Card = ({children, className=''}) => (
+      <div className={`bg-base-800/70 border border-white/10 rounded-2xl p-4 ${className}`}>{children}</div>
+    );
+
+    const Toolbar = ({children}) => (
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
+    );
+
+    const Empty = ({title, subtitle, action}) => (
+      <div className="text-center py-12 opacity-80">
+        <div className="text-lg">{title}</div>
+        <div className="text-sm text-white/70 mb-4">{subtitle}</div>
+        {action}
+      </div>
+    );
+
+    // ---------- NOTAS ----------
+    const Notes = () => {
+      const [notes, setNotes] = useState(() => load('notes', []));
+      const [q, setQ] = useState('');
+      const [text, setText] = useState('');
+
+      useEffect(()=>save('notes', notes), [notes]);
+      const filtered = useMemo(()=> notes.filter(n => (n.title+" "+n.text).toLowerCase().includes(q.toLowerCase())), [notes, q]);
+
+      const add = () => {
+        if (!text.trim()) return;
+        const firstLine = text.trim().split('\n')[0];
+        const title = firstLine.replace(/^#+\s?/, '').slice(0, 60) || 'Sem título';
+        setNotes([{ id: crypto.randomUUID(), title, text, ts: Date.now() }, ...notes]);
+        setText('');
+      };
+
+      const remove = (id) => setNotes(notes.filter(n => n.id !== id));
+
+      const copyMD = async (md) => {
+        try{ await navigator.clipboard.writeText(md); alert('Copiado como Markdown!'); }catch{}
+      }
+
+      return (
+        <div className="grid gap-4">
+          <Toolbar>
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar" className="px-3 py-2 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500" />
+          </Toolbar>
+          <Card>
+            <div className="flex items-start gap-3">
+              <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="# Título opcional\nEscreva sua nota em Markdown..." className="w-full h-28 bg-black/30 border border-white/10 rounded-xl p-3 outline-none focus:border-blue-500"></textarea>
+              <button onClick={add} className="h-28 px-4 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 font-semibold hover:opacity-90">Adicionar</button>
+            </div>
+          </Card>
+
+          {filtered.length === 0 ? (
+            <Empty title="Sem notas ainda" subtitle="Crie sua primeira nota em Markdown" action={null} />
+          ) : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map(n => (
+                <Card key={n.id}>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div>
+                      <div className="font-semibold text-white">{n.title}</div>
+                      <div className="text-xs text-white/60">{new Date(n.ts).toLocaleString()}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={()=>copyMD(n.text)} title="Copiar Markdown" className="px-2 py-1 rounded-lg bg-black/30 border border-white/10">MD</button>
+                      <button onClick={()=>remove(n.id)} title="Excluir" className="px-2 py-1 rounded-lg bg-black/30 border border-white/10">🗑️</button>
+                    </div>
+                  </div>
+                  <pre className="whitespace-pre-wrap text-white/90 text-sm">{n.text}</pre>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ---------- DÚVIDAS (Q&A pessoal) ----------
+    const Doubts = () => {
+      const [items, setItems] = useState(()=>load('doubts', []));
+      const [q, setQ] = useState('');
+      const [ask, setAsk] = useState('');
+      useEffect(()=>save('doubts', items), [items]);
+      const filtered = useMemo(()=> items.filter(i => (i.q+" "+i.a).toLowerCase().includes(q.toLowerCase())), [items, q]);
+      const add = () => {
+        if(!ask.trim()) return;
+        setItems([{ id: crypto.randomUUID(), q: ask.trim(), a: '', done:false, ts: Date.now()}, ...items]);
+        setAsk('');
+      };
+      const solve = (id) => {
+        const a = prompt('Resposta/observações:') ?? '';
+        setItems(items.map(i => i.id===id ? {...i, a, done:true} : i));
+      };
+      const remove = (id) => setItems(items.filter(i=>i.id!==id));
+      return (
+        <div className="grid gap-4">
+          <Toolbar>
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar dúvida" className="px-3 py-2 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500" />
+          </Toolbar>
+          <Card>
+            <div className="flex items-center gap-3">
+              <input value={ask} onChange={e=>setAsk(e.target.value)} placeholder="Qual sua dúvida?" className="flex-1 px-3 py-2 rounded-xl bg-black/30 border border-white/10 outline-none focus:border-blue-500" />
+              <button onClick={add} className="px-4 py-2 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 font-semibold hover:opacity-90">Adicionar</button>
+            </div>
+          </Card>
+          {filtered.length===0 ? <Empty title="Zero dúvidas por aqui" subtitle="Adicione perguntas para resolver depois"/> : (
+            <div className="grid gap-3">
+              {filtered.map(i => (
+                <Card key={i.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium">{i.q}</div>
+                      <div className="text-xs text-white/60">{new Date(i.ts).toLocaleString()}</div>
+                      {i.a && <div className="mt-2 text-sm text-white/90 whitespace-pre-wrap">Resposta: {i.a}</div>}
+                    </div>
+                    <div className="flex gap-2">
+                      {!i.done && <button onClick={()=>solve(i.id)} className="px-3 py-1 rounded-xl bg-black/30 border border-white/10">Resolver</button>}
+                      <button onClick={()=>remove(i.id)} className="px-3 py-1 rounded-xl bg-black/30 border border-white/10">Excluir</button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    };
+
+    // ---------- AGENDA / TAREFAS ----------
+    const Agenda = () => {
+      const [tasks, setTasks] = useState(()=>load('tasks', []));
+      const [title, setTitle] = useState('');
+      const [date, setDate] = useState('');
+      useEffect(()=>save('tasks', tasks), [tasks]);
+
+      const add = () => {
+        if(!title.trim()) return;
+        setTasks([{ id: crypto.randomUUID(), title, date, done:false, ts: Date.now() }, ...tasks]);
+        setTitle(''); setDate('');
+      };
+      const toggle = (id) => setTasks(tasks.map(t=>t.id===id?{...t, done:!t.done}:t));
+      const remove = (id) => setTasks(tasks.filter(t=>t.id!==id));
+
+      const overdue = useMemo(()=> tasks.filter(t=>!t.done && t.date && new Date(t.date) < new Date(new Date().toDateString())), [tasks]);
+
+      return (
+        <div className="grid gap-4">
+          <Card>
+            <div className="grid md:grid-cols-3 gap-3">
+              <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Nova tarefa" className="px-3 py-2 rounded-xl bg-black/30 border border-white/10 outline-none focus:border-blue-500" />
+              <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="px-3 py-2 rounded-xl bg-black/30 border border-white/10 outline-none focus:border-blue-500" />
+              <button onClick={add} className="px-4 py-2 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 font-semibold hover:opacity-90">Adicionar</button>
+            </div>
+          </Card>
+
+          {overdue.length>0 && (
+            <Card className="border border-purple-500/40">
+              <div className="font-semibold text-purple-400 mb-1">Atrasadas</div>
+              <div className="flex flex-wrap gap-2">
+                {overdue.map(t => (
+                  <span key={t.id} className="px-3 py-1 rounded-xl bg-black/40 border border-white/10 text-sm">{t.title} — {t.date}</span>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          <div className="grid gap-3">
+            {tasks.length===0 ? <Empty title="Sem tarefas" subtitle="Crie tarefas com prazo e marque como concluídas"/> : tasks.map(t => (
+              <Card key={t.id}>
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" checked={t.done} onChange={()=>toggle(t.id)} className="w-5 h-5"/>
+                  <div className="flex-1">
+                    <div className={`font-medium ${t.done?'line-through text-white/60':''}`}>{t.title}</div>
+                    {t.date && <div className="text-xs text-white/60">prazo: {t.date}</div>}
+                  </div>
+                  <button onClick={()=>remove(t.id)} className="px-3 py-1 rounded-xl bg-black/30 border border-white/10">Excluir</button>
+                </label>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )
+    };
+
+    // ---------- FINANÇAS ----------
+    const Financas = () => {
+      const [txs, setTxs] = useState(()=>load('txs', []));
+      const [form, setForm] = useState({ date:'', desc:'', type:'saida', amount:'' });
+      useEffect(()=>save('txs', txs), [txs]);
+
+      const add = () => {
+        const {date, desc, type, amount} = form;
+        const value = parseFloat(String(amount).replace(',', '.'));
+        if(!desc.trim() || !date || isNaN(value)) return;
+        setTxs([{ id: crypto.randomUUID(), date, desc, type, amount:value }, ...txs]);
+        setForm({ date:'', desc:'', type:'saida', amount:'' });
+      };
+      const remove = (id) => setTxs(txs.filter(t=>t.id!==id));
+
+      const saldo = useMemo(()=> txs.reduce((acc,t)=> acc + (t.type==='entrada'? t.amount : -t.amount), 0), [txs]);
+
+      const month = new Date().toISOString().slice(0,7);
+      const mesAtual = useMemo(()=> txs.filter(t=>t.date.startsWith(month)), [txs]);
+      const gastosMes = useMemo(()=> mesAtual.filter(t=>t.type==='saida').reduce((a,t)=>a+t.amount,0), [mesAtual]);
+
+      return (
+        <div className="grid gap-4">
+          <div className="grid md:grid-cols-4 gap-3">
+            <Card>
+              <div className="text-sm text-white/60">Saldo</div>
+              <div className={`text-2xl font-bold ${saldo>=0?'text-blue-400':'text-purple-400'}`}>R$ {saldo.toFixed(2)}</div>
+            </Card>
+            <Card>
+              <div className="text-sm text-white/60">Gastos do mês</div>
+              <div className="text-xl">R$ {gastosMes.toFixed(2)}</div>
+            </Card>
+            <Card className="md:col-span-2">
+              <div className="text-sm text-white/60 mb-2">Adicionar lançamento</div>
+              <div className="grid sm:grid-cols-5 gap-2">
+                <input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} className="px-3 py-2 rounded-xl bg-black/30 border border-white/10"/>
+                <input placeholder="Descrição" value={form.desc} onChange={e=>setForm({...form,desc:e.target.value})} className="px-3 py-2 rounded-xl bg-black/30 border border-white/10"/>
+                <select value={form.type} onChange={e=>setForm({...form,type:e.target.value})} className="px-3 py-2 rounded-xl bg-black/30 border border-white/10">
+                  <option value="entrada">Entrada</option>
+                  <option value="saida">Saída</option>
+                </select>
+                <input placeholder="Valor" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})} className="px-3 py-2 rounded-xl bg-black/30 border border-white/10"/>
+                <button onClick={add} className="px-4 py-2 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 font-semibold">Adicionar</button>
+              </div>
+            </Card>
+          </div>
+
+          <Card>
+            <div className="text-sm text-white/70 mb-2">Histórico</div>
+            {txs.length===0 ? <Empty title="Sem lançamentos" subtitle="Registre entradas e saídas"/> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-white/70">
+                    <tr>
+                      <th className="text-left p-2">Data</th>
+                      <th className="text-left p-2">Descrição</th>
+                      <th className="text-left p-2">Tipo</th>
+                      <th className="text-left p-2">Valor</th>
+                      <th className="p-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {txs.map(t => (
+                      <tr key={t.id} className="border-t border-white/10">
+                        <td className="p-2">{t.date}</td>
+                        <td className="p-2">{t.desc}</td>
+                        <td className="p-2">{t.type}</td>
+                        <td className="p-2">R$ {t.amount.toFixed(2)}</td>
+                        <td className="p-2 text-right"><button onClick={()=>remove(t.id)} className="px-3 py-1 rounded-xl bg-black/30 border border-white/10">Excluir</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      );
+    };
+
+    // ---------- IDEIAS (com tags) ----------
+    const Ideias = () => {
+      const [ideas, setIdeas] = useState(()=>load('ideas', []));
+      const [text, setText] = useState('');
+      const [tag, setTag] = useState('geral');
+      const [filt, setFilt] = useState('');
+      useEffect(()=>save('ideas', ideas), [ideas]);
+
+      const add = () => {
+        if(!text.trim()) return;
+        setIdeas([{ id: crypto.randomUUID(), text:text.trim(), tag, ts: Date.now() }, ...ideas]);
+        setText('');
+      };
+      const remove = (id) => setIdeas(ideas.filter(i=>i.id!==id));
+
+      const filtered = useMemo(()=> ideas.filter(i => (i.text.toLowerCase().includes(filt.toLowerCase()) || i.tag.includes(filt))), [ideas, filt]);
+
+      return (
+        <div className="grid gap-4">
+          <Card>
+            <div className="grid sm:grid-cols-4 gap-2">
+              <input value={text} onChange={e=>setText(e.target.value)} placeholder="Nova ideia (ex.: bot do Discord, app de finanças, landing...)" className="px-3 py-2 rounded-xl bg-black/30 border border-white/10"/>
+              <select value={tag} onChange={e=>setTag(e.target.value)} className="px-3 py-2 rounded-xl bg-black/30 border border-white/10">
+                <option>geral</option>
+                <option>frontend</option>
+                <option>backend</option>
+                <option>bot</option>
+                <option>negócio</option>
+                <option>estudos</option>
+              </select>
+              <input value={filt} onChange={e=>setFilt(e.target.value)} placeholder="Filtrar por texto/tag" className="px-3 py-2 rounded-xl bg-black/30 border border-white/10"/>
+              <button onClick={add} className="px-4 py-2 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 font-semibold">Adicionar</button>
+            </div>
+          </Card>
+
+          {filtered.length===0 ? <Empty title="Sem ideias salvas" subtitle="Anote tudo, sem censura"/> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {filtered.map(i => (
+                <Card key={i.id}>
+                  <div className="text-sm text-white/60">{new Date(i.ts).toLocaleString()} — <span className="text-purple-400">#{i.tag}</span></div>
+                  <div className="mt-1 whitespace-pre-wrap">{i.text}</div>
+                  <div className="mt-3 text-right">
+                    <button onClick={()=>remove(i.id)} className="px-3 py-1 rounded-xl bg-black/30 border border-white/10">Excluir</button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    };
+
+    // ---------- PERFIL (público futuro + backup) ----------
+    const Perfil = () => {
+      const [profile, setProfile] = useState(()=> load('profile', { name:'Dev', bio:'', photo:'', public:false }));
+      useEffect(()=>save('profile', profile), [profile]);
+
+      const exportar = () => {
+        const blob = new Blob([JSON.stringify({
+          profile: load('profile', {}),
+          notes: load('notes', []),
+          doubts: load('doubts', []),
+          tasks: load('tasks', []),
+          txs: load('txs', []),
+          ideas: load('ideas', [])
+        }, null, 2)], {type:'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'devlifehub-backup.json'; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const importar = (file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try{
+            const data = JSON.parse(reader.result);
+            if(data.profile) save('profile', data.profile);
+            if(data.notes) save('notes', data.notes);
+            if(data.doubts) save('doubts', data.doubts);
+            if(data.tasks) save('tasks', data.tasks);
+            if(data.txs) save('txs', data.txs);
+            if(data.ideas) save('ideas', data.ideas);
+            alert('Importado com sucesso. Recarregue a página.');
+          }catch(e){ alert('Arquivo inválido.'); }
+        };
+        reader.readAsText(file);
+      };
+
+      return (
+        <div className="grid gap-4 max-w-2xl">
+          <Card>
+            <div className="flex gap-4 items-center">
+              <img src={profile.photo || 'https://api.dicebear.com/9.x/shapes/svg?seed=dev'} alt="avatar" className="w-16 h-16 rounded-2xl border border-white/10"/>
+              <div className="flex-1 grid gap-2">
+                <input value={profile.name} onChange={e=>setProfile({...profile, name:e.target.value})} placeholder="Seu nome" className="px-3 py-2 rounded-xl bg-black/30 border border-white/10"/>
+                <input value={profile.photo} onChange={e=>setProfile({...profile, photo:e.target.value})} placeholder="URL da foto" className="px-3 py-2 rounded-xl bg-black/30 border border-white/10"/>
+                <textarea value={profile.bio} onChange={e=>setProfile({...profile, bio:e.target.value})} placeholder="Descrição / o que você faz" className="px-3 py-2 rounded-xl bg-black/30 border border-white/10"></textarea>
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input type="checkbox" checked={profile.public} onChange={e=>setProfile({...profile, public:e.target.checked})}/>
+                  Tornar perfil público (requer backend/Firebase no futuro)
+                </label>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="font-semibold mb-2">Backup</div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={exportar} className="px-4 py-2 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 font-semibold">Exportar dados</button>
+              <label className="px-4 py-2 rounded-2xl bg-black/30 border border-white/10 cursor-pointer">
+                Importar backup
+                <input type="file" accept="application/json" className="hidden" onChange={e=>e.target.files[0] && importar(e.target.files[0])}/>
+              </label>
+            </div>
+            <div className="text-xs text-white/60 mt-2">Dica: faça commit do backup.json no seu repositório para ter histórico.</div>
+          </Card>
+        </div>
+      )
+    };
+
+    // ---------- APP ----------
+    const App = () => {
+      const [tab, setTab] = useState('Notas');
+      const profile = load('profile', {name:'Dev', photo:'', bio:''});
+
+      const tabs = [
+        {key:'Notas', icon:'📝'},
+        {key:'Dúvidas', icon:'❓'},
+        {key:'Agenda', icon:'📅'},
+        {key:'Finanças', icon:'💸'},
+        {key:'Ideias', icon:'✨'},
+        {key:'Perfil', icon:'👤'},
+      ];
+
+      return (
+        <div className="min-h-full">
+          <header className="sticky top-0 z-10 backdrop-blur bg-base-900/80 border-b border-white/10">
+            <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 grid place-content-center font-black">D</div>
+              <div>
+                <div className="font-extrabold text-xl">DevLife Hub</div>
+                <div className="text-xs text-white/60 -mt-1">seu painel pessoal — notas • agenda • finanças • ideias</div>
+              </div>
+              <div className="ml-auto flex items-center gap-3">
+                <nav className="hidden md:flex gap-2">
+                  {tabs.map(t => (
+                    <TabButton key={t.key} active={tab===t.key} onClick={()=>setTab(t.key)} icon={<span>{t.icon}</span>} label={t.key}/>
+                  ))}
+                </nav>
+                <button className="md:hidden px-3 py-2 rounded-2xl bg-base-800 border border-white/10" onClick={()=>{
+                  const next = tabs[(tabs.findIndex(x=>x.key===tab)+1)%tabs.length].key; setTab(next);
+                }}>Trocar aba</button>
+                <div className="flex items-center gap-2">
+                  <img src={profile.photo || 'https://api.dicebear.com/9.x/shapes/svg?seed=dev'} className="w-9 h-9 rounded-2xl border border-white/10"/>
+                  <div className="leading-4">
+                    <div className="text-sm font-semibold">{profile.name || 'Dev'}</div>
+                    <div className="text-[11px] text-white/60">{profile.bio?.slice(0,28) || 'seu perfil'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-6xl mx-auto px-4 py-6 grid gap-6">
+            <nav className="md:hidden flex gap-2 overflow-x-auto pb-1">
+              {tabs.map(t => (
+                <TabButton key={t.key} active={tab===t.key} onClick={()=>setTab(t.key)} icon={<span>{t.icon}</span>} label={t.key}/>
+              ))}
+            </nav>
+
+            {tab==='Notas' && <Notes/>}
+            {tab==='Dúvidas' && <Doubts/>}
+            {tab==='Agenda' && <Agenda/>}
+            {tab==='Finanças' && <Financas/>}
+            {tab==='Ideias' && <Ideias/>}
+            {tab==='Perfil' && <Perfil/>}
+
+            <footer className="text-center text-xs text-white/50 pt-8 pb-6">Feito para GitHub Pages • Local-first (funciona offline). Para perfil público, adicione Firebase depois.</footer>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>
